@@ -41,6 +41,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onAppStarted(AppStarted event, Emitter<AuthState> emit) async {
     final isAuthenticated = await _authService.isAuthenticated();
     if (isAuthenticated) {
+      // Check health in background
+      final client = await _authService.getApiClient();
+      client.checkHealth(); // Fire and forget for now
+      
       // If we have a token, we require biometrics every time the app starts
       emit(AuthBiometricRequired());
     } else {
@@ -50,10 +54,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onLoginRequested(LoginRequested event, Emitter<AuthState> emit) async {
     try {
-      // Simplified: in a real app, this would trigger OIDC flow
-      // and then save the token.
-      await _authService.saveToken("mock_token_for_prototype");
-      emit(AuthAuthenticated("mock_token_for_prototype"));
+      await _authService.loginWithOidc(event.issuerUrl, event.clientId);
+      final token = await _authService.getToken();
+      
+      // Verify connectivity after login
+      final client = await _authService.getApiClient();
+      final healthy = await client.checkHealth();
+      
+      if (healthy) {
+        emit(AuthAuthenticated(token ?? ""));
+      } else {
+        // Even if not healthy, we are authenticated. 
+        // We'll show a warning in Phase 2, but for now just proceed.
+        emit(AuthAuthenticated(token ?? ""));
+      }
     } catch (e) {
       emit(AuthFailure(e.toString()));
     }
@@ -80,10 +94,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       final bool didAuthenticate = await _localAuth.authenticate(
         localizedReason: 'Please authenticate to access Fenrir Admin',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
       );
 
       if (didAuthenticate) {

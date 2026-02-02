@@ -1,11 +1,12 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:openid_client/openid_client_browser.dart' as openid;
-import 'package:fenrir_mobile/api/export.dart';
+import 'package:fenrir_mobile/api/manual_client.dart';
 
 class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final String _tokenKey = 'fenrir_oidc_token';
   final String _baseUrlKey = 'fenrir_base_url';
+  
+  ApiClient? _apiClient;
 
   Future<void> saveToken(String token) async {
     await _storage.write(key: _tokenKey, value: token);
@@ -25,6 +26,7 @@ class AuthService {
 
   Future<void> logout() async {
     await _storage.delete(key: _tokenKey);
+    _apiClient = null;
   }
 
   Future<bool> isAuthenticated() async {
@@ -32,16 +34,19 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  // Placeholder for OIDC flow
-  // In a real app, this would involve launching a browser or using a platform-specific plugin
-  Future<void> loginWithOidc(String issuerUrl, String clientId) async {
-    // This is a simplified OIDC flow for demonstration
-    // Real implementation would use openid_client and url_launcher
-    final issuer = await openid.Issuer.discover(Uri.parse(issuerUrl));
-    final client = openid.Client(issuer, clientId);
+  Future<ApiClient> getApiClient() async {
+    if (_apiClient != null) return _apiClient!;
     
-    // For mobile, we would use a different approach (e.g., flutter_appauth)
-    // but the spec mentioned verifying OIDC in a headless prototype first.
-    // I'll implement a stub here and detailed logic later.
+    final baseUrl = await getBaseUrl() ?? "http://localhost:8080";
+    final token = await getToken();
+    _apiClient = ApiClient(baseUrl, token: token);
+    return _apiClient!;
+  }
+
+  Future<void> loginWithOidc(String issuerUrl, String clientId) async {
+    // For Phase 1, we will mock the successful login after a simulated delay
+    await Future.delayed(const Duration(seconds: 1));
+    await saveToken("mock_token_${DateTime.now().millisecondsSinceEpoch}");
+    await saveBaseUrl(issuerUrl); // Using issuerUrl as placeholder for backend base
   }
 }
